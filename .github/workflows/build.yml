@@ -59,8 +59,20 @@ jobs:
         env:
           VERSION: ${{ steps.determine_version.outputs.version }}
           GIT_COMMIT: ${{ steps.get_git_commit.outputs.short_sha }}
-          BUILD_TIME: ${{ github.event.repository.updated_at }}
-        run: make build
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: 0
+        run: |
+          ldflags="-w -s -X 'main.Version=${VERSION}' -X 'main.GitCommit=${GIT_COMMIT}' -X 'main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            OUTPUT_NAME="${APP_NAME}_${GOOS}_${GOARCH}"
+          else
+            OUTPUT_NAME="${APP_NAME}"
+          fi
+
+          mkdir -p build
+          go build -trimpath -ldflags="${ldflags}" -o build/${OUTPUT_NAME} ./cmd/controller
 
       - name: Upload Artifact
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -109,4 +121,4 @@ jobs:
           draft: false
           body_path: release_notes.md
           prerelease: false
-          files: build/${{ env.APP_NAME }}
+          files: build/${{ env.APP_NAME }}_linux_amd64
