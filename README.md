@@ -4,19 +4,19 @@ A dependency-aware Docker container orchestrator for Saltbox, written in Go.
 
 ## Overview
 
-SDC manages Docker container startup and shutdown based on dependency labels. It ensures containers start in the correct order, waits for health checks, and handles graceful shutdown in reverse dependency order.
+Saltbox Docker Controller manages Docker container startup and shutdown based on dependency labels. It ensures containers start in the correct order, waits for health checks, and handles graceful shutdown in reverse dependency order.
 
 **Features:**
 - Dependency-aware orchestration using Docker labels
 - Topological sort for optimal startup/shutdown order
 - Parallel execution of independent containers
-- Health check polling with configurable timeouts
+- Health check polling (60 second timeout per container)
 - Job-based API for async operations
 - Block/unblock operations for maintenance windows
 - REST API server mode
 - Helper mode for Docker daemon lifecycle integration
 - Graceful shutdown handling
-- Comprehensive test suite (56 tests)
+- Comprehensive test suite (80 tests)
 
 ## Building
 
@@ -84,18 +84,18 @@ sdc/
 ├── internal/
 │   ├── api/               # HTTP handlers, middleware, and router
 │   ├── client/            # HTTP client for helper mode
+│   ├── config/            # Configuration management
 │   ├── docker/            # Docker client wrapper and label parsing
 │   ├── graph/             # Dependency graph and topological sort
-│   ├── orchestrator/      # Container orchestration engine
 │   ├── jobs/              # Job manager with worker pool
-│   └── config/            # Configuration management
+│   └── orchestrator/      # Container orchestration engine
 └── pkg/logger/            # Structured logging (Zap)
 ```
 
 ### How It Works
 
-1. **Label-based dependencies**: Containers declare dependencies via `sdc.requires` labels
-2. **Graph building**: SDC builds a dependency graph from all running containers
+1. **Label-based dependencies**: Containers declare dependencies via `com.github.saltbox.depends_on` labels
+2. **Graph building**: Saltbox Docker Controller builds a dependency graph from all running containers
 3. **Topological sort**: Determines optimal startup/shutdown order
 4. **Batch execution**: Independent containers in each batch start/stop in parallel
 5. **Health checking**: Polls container health status before proceeding to dependents
@@ -103,22 +103,24 @@ sdc/
 
 ## Dependencies
 
-- `github.com/moby/moby/client` v0.1.0-beta.3 - Docker client SDK
-- `github.com/moby/moby/api` v1.52.0-beta.4 - Docker API types
-- `github.com/go-chi/chi/v5` - HTTP router
-- `go.uber.org/zap` - Structured logging
-- `github.com/spf13/cobra` - CLI framework
-- `github.com/google/uuid` - UUID generation
-- `github.com/stretchr/testify` - Testing utilities
+- `github.com/moby/moby/client` v0.1.0-rc.1 - Docker client SDK
+- `github.com/moby/moby/api` v1.52.0-rc.1 - Docker API types
+- `github.com/go-chi/chi/v5` v5.2.3 - HTTP router
+- `github.com/spf13/cobra` v1.10.1 - CLI framework
+- `github.com/google/uuid` v1.6.0 - UUID generation
+- `github.com/stretchr/testify` v1.11.1 - Testing utilities
 
 ## Docker Labels
 
-SDC uses Docker labels to define container dependencies:
+Saltbox Docker Controller uses Saltbox Docker labels to define container management and dependencies:
 
 ```yaml
 labels:
-  sdc.requires: "postgres,redis"  # Comma-separated list of container names
-  sdc.startup_delay: "5"          # Seconds to wait after this container starts
+  com.github.saltbox.saltbox_managed: "true"              # Required: Enable SDC management
+  com.github.saltbox.saltbox_controller: "true"           # Optional: Enable/disable controller (default: true)
+  com.github.saltbox.depends_on: "postgres,redis"         # Optional: Comma-separated dependencies
+  com.github.saltbox.depends_on.delay: "5"                # Optional: Startup delay in seconds
+  com.github.saltbox.depends_on.healthchecks: "true"      # Optional: Wait for healthchecks (default: false)
 ```
 
 **Example docker-compose.yml:**
@@ -127,32 +129,36 @@ services:
   postgres:
     image: postgres:15
     labels:
-      sdc.startup_delay: "10"
+      com.github.saltbox.saltbox_managed: "true"
+      com.github.saltbox.depends_on.delay: "10"
 
   redis:
     image: redis:7
     labels:
-      sdc.startup_delay: "5"
+      com.github.saltbox.saltbox_managed: "true"
+      com.github.saltbox.depends_on.delay: "5"
 
   app:
     image: myapp:latest
     labels:
-      sdc.requires: "postgres,redis"
-      sdc.startup_delay: "2"
+      com.github.saltbox.saltbox_managed: "true"
+      com.github.saltbox.depends_on: "postgres,redis"
+      com.github.saltbox.depends_on.delay: "2"
+      com.github.saltbox.depends_on.healthchecks: "true"
 ```
 
-SDC will ensure `postgres` and `redis` start first (in parallel), wait for health checks, apply startup delays, then start `app`.
+Saltbox Docker Controller will ensure `postgres` and `redis` start first (in parallel), wait for health checks and startup delays, then start `app`.
 
 ## API Endpoints
 
 ### Container Operations
 - `POST /start` - Start containers in dependency order
-  - Request: `{"timeout": 600, "ignore": ["container1"]}`
-  - Response: `{"id": "uuid", "status": "pending"}`
+  - Query params: `?timeout=600` (optional, default: 600)
+  - Response: `{"job_id": "uuid"}`
   - Returns HTTP 503 if operations are blocked
 - `POST /stop` - Stop containers in reverse dependency order
-  - Request: `{"timeout": 300, "ignore": ["container2"]}`
-  - Response: `{"id": "uuid", "status": "pending"}`
+  - Query params: `?timeout=300&ignore=container1&ignore=container2` (optional, default timeout: 300)
+  - Response: `{"job_id": "uuid"}`
   - Returns HTTP 503 if operations are blocked
 
 ### Block/Unblock Operations
@@ -168,16 +174,17 @@ SDC will ensure `postgres` and `redis` start first (in parallel), wait for healt
   - Response: Full job object with status, results, and timing information
   - Returns `{"status": "not_found"}` with HTTP 404 if job doesn't exist
 
-### Health
+### Health Check
 - `GET /ping` - Health check endpoint
+  - Response: `{"status": "healthy"}`
 
 ## Helper Mode Details
 
 The helper mode is designed to run as a systemd service for automatic container lifecycle management:
 
 **Lifecycle:**
-1. Wait for controller server to become ready (60s timeout)
-2. Apply configured startup delay
+1. Wait for controller server to become ready (60 second timeout)
+2. Apply configured startup delay (default: 5 seconds)
 3. Submit start job for all managed containers
 4. Wait for job completion
 5. Run until receiving SIGTERM/SIGINT
@@ -193,10 +200,10 @@ When start/stop operations are blocked (HTTP 503 response), the helper will:
 **Options:**
 ```bash
 ./build/sdc helper \
-  --controller-url http://localhost:3377 \  # Controller API URL
-  --startup-delay 10s \                      # Delay before starting containers
-  --timeout 600 \                            # Job timeout in seconds
-  --poll-interval 5s                         # Status polling interval
+  --controller-url http://127.0.0.1:3377 \  # Controller API URL (default: http://127.0.0.1:3377)
+  --startup-delay 5s \                       # Delay before starting containers (default: 5s)
+  --timeout 600 \                            # Job timeout in seconds (default: 600)
+  --poll-interval 5s                         # Status polling interval (default: 5s)
 ```
 
 ## License
