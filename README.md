@@ -12,10 +12,11 @@ SDC manages Docker container startup and shutdown based on dependency labels. It
 - Parallel execution of independent containers
 - Health check polling with configurable timeouts
 - Job-based API for async operations
+- Block/unblock operations for maintenance windows
 - REST API server mode
 - Helper mode for Docker daemon lifecycle integration
 - Graceful shutdown handling
-- Comprehensive test suite (54 tests)
+- Comprehensive test suite (56 tests)
 
 ## Building
 
@@ -148,14 +149,24 @@ SDC will ensure `postgres` and `redis` start first (in parallel), wait for healt
 - `POST /start` - Start containers in dependency order
   - Request: `{"timeout": 600, "ignore": ["container1"]}`
   - Response: `{"id": "uuid", "status": "pending"}`
+  - Returns HTTP 503 if operations are blocked
 - `POST /stop` - Stop containers in reverse dependency order
   - Request: `{"timeout": 300, "ignore": ["container2"]}`
   - Response: `{"id": "uuid", "status": "pending"}`
+  - Returns HTTP 503 if operations are blocked
 
-### Job Management
-- `GET /jobs` - List all jobs
-- `GET /jobs/{id}` - Get job status and results
-- `DELETE /jobs/{id}` - Delete a job
+### Block/Unblock Operations
+- `POST /block/{duration}` - Block start/stop operations temporarily
+  - `duration` parameter in minutes (default: 10)
+  - Response: `{"message": "Operations are now blocked for N minutes"}`
+  - Auto-unblocks after the specified duration
+- `POST /unblock` - Manually unblock operations
+  - Response: `{"message": "Operations are now unblocked"}`
+
+### Job Status
+- `GET /job_status/{job_id}` - Get job status
+  - Response: `{"status": "pending|running|completed|failed"}`
+  - Returns `{"status": "not_found"}` with HTTP 404 if job doesn't exist
 
 ### Health
 - `GET /ping` - Health check endpoint
@@ -172,6 +183,12 @@ The helper mode is designed to run as a systemd service for automatic container 
 5. Run until receiving SIGTERM/SIGINT
 6. Submit stop job for all containers
 7. Wait for stop completion and exit gracefully
+
+**Blocked Operations Handling:**
+When start/stop operations are blocked (HTTP 503 response), the helper will:
+- Log an INFO message: "Container start/stop operation is currently blocked, skipping"
+- Continue running without failing
+- This allows the helper to gracefully handle maintenance windows
 
 **Options:**
 ```bash

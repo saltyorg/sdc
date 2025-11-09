@@ -49,10 +49,8 @@ func (s *Server) Router() http.Handler {
 	r.Post("/block/{duration}", s.HandleBlock)
 	r.Post("/unblock", s.HandleUnblock)
 
-	// Job management routes
-	r.Get("/jobs", s.HandleListJobs)
-	r.Get("/jobs/{id}", s.HandleGetJob)
-	r.Delete("/jobs/{id}", s.HandleDeleteJob)
+	// Job status route
+	r.Get("/job_status/{job_id}", s.HandleGetJobStatus)
 
 	return r
 }
@@ -159,41 +157,22 @@ func (s *Server) HandleStopContainers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HandleGetJob handles GET /api/v1/jobs/{id}
-func (s *Server) HandleGetJob(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+// HandleGetJobStatus handles GET /job_status/{job_id}
+func (s *Server) HandleGetJobStatus(w http.ResponseWriter, r *http.Request) {
+	jobID := chi.URLParam(r, "job_id")
 
-	job, err := s.jobManager.Get(id)
+	job, err := s.jobManager.Get(jobID)
 	if err != nil {
-		s.logger.Debug("Job not found", "job_id", id)
-		s.writeError(w, http.StatusNotFound, "Job not found")
+		s.logger.Debug("Job not found", "job_id", jobID)
+		s.writeJSON(w, http.StatusNotFound, map[string]string{
+			"status": "not_found",
+		})
 		return
 	}
 
-	s.writeJSON(w, http.StatusOK, job)
-}
-
-// HandleListJobs handles GET /api/v1/jobs
-func (s *Server) HandleListJobs(w http.ResponseWriter, r *http.Request) {
-	jobs := s.jobManager.List()
-	s.writeJSON(w, http.StatusOK, map[string]any{
-		"jobs":  jobs,
-		"count": len(jobs),
+	s.writeJSON(w, http.StatusOK, map[string]string{
+		"status": string(job.Status),
 	})
-}
-
-// HandleDeleteJob handles DELETE /api/v1/jobs/{id}
-func (s *Server) HandleDeleteJob(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-
-	if err := s.jobManager.Delete(id); err != nil {
-		s.logger.Debug("Job not found for deletion", "job_id", id)
-		s.writeError(w, http.StatusNotFound, "Job not found")
-		return
-	}
-
-	s.logger.Info("Job deleted", "job_id", id)
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // HandleHealth handles GET /health
