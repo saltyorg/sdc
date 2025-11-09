@@ -72,7 +72,7 @@ func (c *Client) StartContainers(ctx context.Context, timeout int, ignore []stri
 	}
 
 	var resp JobResponse
-	if err := c.post(ctx, "/api/v1/jobs/start", req, &resp); err != nil {
+	if err := c.post(ctx, "/start", req, &resp); err != nil {
 		return nil, err
 	}
 
@@ -91,7 +91,7 @@ func (c *Client) StopContainers(ctx context.Context, timeout int, ignore []strin
 	}
 
 	var resp JobResponse
-	if err := c.post(ctx, "/api/v1/jobs/stop", req, &resp); err != nil {
+	if err := c.post(ctx, "/stop", req, &resp); err != nil {
 		return nil, err
 	}
 
@@ -105,7 +105,7 @@ func (c *Client) StopContainers(ctx context.Context, timeout int, ignore []strin
 // GetJob retrieves job status and results
 func (c *Client) GetJob(ctx context.Context, jobID string) (*Job, error) {
 	var job Job
-	if err := c.get(ctx, fmt.Sprintf("/api/v1/jobs/%s", jobID), &job); err != nil {
+	if err := c.get(ctx, fmt.Sprintf("/jobs/%s", jobID), &job); err != nil {
 		return nil, err
 	}
 
@@ -141,7 +141,7 @@ func (c *Client) WaitForJob(ctx context.Context, jobID string, pollInterval time
 // Health checks if the server is healthy
 func (c *Client) Health(ctx context.Context) error {
 	var resp HealthResponse
-	if err := c.get(ctx, "/health", &resp); err != nil {
+	if err := c.get(ctx, "/ping", &resp); err != nil {
 		return err
 	}
 

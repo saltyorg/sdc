@@ -27,7 +27,7 @@ func TestClient_StartContainers(t *testing.T) {
 
 	// Create test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/jobs/start", r.URL.Path)
+		assert.Equal(t, "/start", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
 
 		var req JobRequest
@@ -58,7 +58,7 @@ func TestClient_StopContainers(t *testing.T) {
 	log, _ := logger.New(true)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/jobs/stop", r.URL.Path)
+		assert.Equal(t, "/stop", r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
 
 		var req JobRequest
@@ -88,7 +88,7 @@ func TestClient_GetJob(t *testing.T) {
 	log, _ := logger.New(true)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/v1/jobs/test-job-id", r.URL.Path)
+		assert.Equal(t, "/jobs/test-job-id", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
 		job := Job{
@@ -174,7 +174,7 @@ func TestClient_Health(t *testing.T) {
 	log, _ := logger.New(true)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/health", r.URL.Path)
+		assert.Equal(t, "/ping", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
 		resp := HealthResponse{Status: "healthy"}

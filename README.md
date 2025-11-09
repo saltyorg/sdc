@@ -158,7 +158,7 @@ SDC will ensure `postgres` and `redis` start first (in parallel), wait for healt
 - `DELETE /jobs/{id}` - Delete a job
 
 ### Health
-- `GET /health` - Health check endpoint
+- `GET /ping` - Health check endpoint
 
 ## Helper Mode Details
 

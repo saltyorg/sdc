@@ -36,7 +36,7 @@ func (s *Server) Router() http.Handler {
 	// Main API routes (spec-compliant)
 	r.Post("/start", s.HandleStartContainers)
 	r.Post("/stop", s.HandleStopContainers)
-	r.Get("/health", s.HandleHealth)
+	r.Get("/ping", s.HandleHealth)
 
 	// Job management routes
 	r.Get("/jobs", s.HandleListJobs)
