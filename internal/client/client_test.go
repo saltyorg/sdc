@@ -88,7 +88,7 @@ func TestClient_GetJob(t *testing.T) {
 	log, _ := logger.New(true)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/jobs/test-job-id", r.URL.Path)
+		assert.Equal(t, "/job_status/test-job-id", r.URL.Path)
 		assert.Equal(t, "GET", r.Method)
 
 		job := Job{

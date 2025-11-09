@@ -51,6 +51,7 @@ func runHelper(cmd *cobra.Command, args []string) error {
 
 	// Create client
 	apiClient := client.NewClient(helperConfig.ControllerURL, log)
+	apiClient.SetUserAgent("sdc/" + Version)
 
 	// Wait for controller to become ready
 	log.Info("Waiting for controller to become ready")

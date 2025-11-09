@@ -164,8 +164,8 @@ SDC will ensure `postgres` and `redis` start first (in parallel), wait for healt
   - Response: `{"message": "Operations are now unblocked"}`
 
 ### Job Status
-- `GET /job_status/{job_id}` - Get job status
-  - Response: `{"status": "pending|running|completed|failed"}`
+- `GET /job_status/{job_id}` - Get job details and status
+  - Response: Full job object with status, results, and timing information
   - Returns `{"status": "not_found"}` with HTTP 404 if job doesn't exist
 
 ### Health

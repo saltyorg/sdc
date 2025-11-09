@@ -170,9 +170,7 @@ func (s *Server) HandleGetJobStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeJSON(w, http.StatusOK, map[string]string{
-		"status": string(job.Status),
-	})
+	s.writeJSON(w, http.StatusOK, job)
 }
 
 // HandleHealth handles GET /health

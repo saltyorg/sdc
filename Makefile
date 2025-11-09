@@ -17,7 +17,7 @@ GOVET=$(GOCMD) vet
 BINARY_NAME=sdc
 BINARY_PATH=./cmd/controller
 BUILD_DIR=build
-VERSION?=$(shell git describe --tags --always 2>/dev/null || echo "dev")
+VERSION=0.0.0-dev
 GIT_COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME?=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 

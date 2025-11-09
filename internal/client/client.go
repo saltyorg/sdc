@@ -14,9 +14,10 @@ import (
 
 // Client represents an HTTP client for communicating with the controller server
 type Client struct {
-	baseURL    string
+	baseURL   string
 	httpClient *http.Client
-	logger     *logger.Logger
+	logger    *logger.Logger
+	userAgent string
 }
 
 // NewClient creates a new controller client
@@ -26,8 +27,14 @@ func NewClient(baseURL string, logger *logger.Logger) *Client {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		logger: logger,
+		logger:    logger,
+		userAgent: "sdc-client/1.0",
 	}
+}
+
+// SetUserAgent sets a custom User-Agent header for requests
+func (c *Client) SetUserAgent(userAgent string) {
+	c.userAgent = userAgent
 }
 
 // JobRequest represents a request to start or stop containers
@@ -38,7 +45,7 @@ type JobRequest struct {
 
 // JobResponse represents a job creation response
 type JobResponse struct {
-	ID     string `json:"id"`
+	ID     string `json:"job_id"`
 	Status string `json:"status"`
 }
 
@@ -105,7 +112,7 @@ func (c *Client) StopContainers(ctx context.Context, timeout int, ignore []strin
 // GetJob retrieves job status and results
 func (c *Client) GetJob(ctx context.Context, jobID string) (*Job, error) {
 	var job Job
-	if err := c.get(ctx, fmt.Sprintf("/jobs/%s", jobID), &job); err != nil {
+	if err := c.get(ctx, fmt.Sprintf("/job_status/%s", jobID), &job); err != nil {
 		return nil, err
 	}
 
@@ -198,6 +205,7 @@ func (c *Client) post(ctx context.Context, path string, body any, result any) er
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", c.userAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -224,6 +232,8 @@ func (c *Client) get(ctx context.Context, path string, result any) error {
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
+
+	req.Header.Set("User-Agent", c.userAgent)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
