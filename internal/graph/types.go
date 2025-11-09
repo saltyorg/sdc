@@ -7,10 +7,10 @@ import (
 // Node represents a container in the dependency graph
 type Node struct {
 	// Container information
-	ID          string
-	Name        string
-	Labels      map[string]string
-	IsRunning   bool
+	ID            string
+	Name          string
+	Labels        map[string]string
+	IsRunning     bool
 	IsPlaceholder bool // True if container doesn't exist but is referenced as a dependency
 
 	// Dependency information

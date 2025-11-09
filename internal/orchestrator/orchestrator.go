@@ -168,7 +168,7 @@ func (o *Orchestrator) StartContainers(ctx context.Context, opts StartContainers
 				}
 
 				// Collect results from this batch
-				for i := 0; i < len(batch); i++ {
+				for range batch {
 					br := <-batchChan
 					compResult.started = append(compResult.started, br.started...)
 					compResult.skipped = append(compResult.skipped, br.skipped...)
@@ -187,7 +187,7 @@ func (o *Orchestrator) StartContainers(ctx context.Context, opts StartContainers
 		Failed:  []string{},
 	}
 
-	for i := 0; i < len(components); i++ {
+	for range components {
 		compResult := <-resultChan
 		result.Started = append(result.Started, compResult.started...)
 		result.Skipped = append(result.Skipped, compResult.skipped...)
@@ -318,7 +318,7 @@ func (o *Orchestrator) StopContainers(ctx context.Context, opts StopContainersOp
 				}
 
 				// Collect results from this batch
-				for i := 0; i < len(batch); i++ {
+				for range batch {
 					br := <-batchChan
 					compResult.stopped = append(compResult.stopped, br.stopped...)
 					compResult.skipped = append(compResult.skipped, br.skipped...)
@@ -337,7 +337,7 @@ func (o *Orchestrator) StopContainers(ctx context.Context, opts StopContainersOp
 		Failed:  []string{},
 	}
 
-	for i := 0; i < len(components); i++ {
+	for range components {
 		compResult := <-resultChan
 		result.Stopped = append(result.Stopped, compResult.stopped...)
 		result.Skipped = append(result.Skipped, compResult.skipped...)

@@ -3,6 +3,7 @@ package graph
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
@@ -179,11 +180,9 @@ func (g *Graph) HasCycles() (bool, []string) {
 		node.visited = true
 		node.inStack = true
 
-		for _, child := range node.Children {
-			if dfs(child) {
-				cycle = append(cycle, node.Name)
-				return true
-			}
+		if slices.ContainsFunc(node.Children, dfs) {
+			cycle = append(cycle, node.Name)
+			return true
 		}
 
 		node.inStack = false

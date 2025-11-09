@@ -14,7 +14,7 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
 GOVET=$(GOCMD) vet
-BINARY_NAME=saltbox-docker-controller
+BINARY_NAME=sdc
 BINARY_PATH=./cmd/controller
 BUILD_DIR=build
 VERSION?=$(shell git describe --tags --always 2>/dev/null || echo "dev")
@@ -30,7 +30,7 @@ BUILD_FLAGS=CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS)
 # Default target
 all: test build
 
-## build: Build the saltbox-docker-controller binary
+## build: Build the sdc binary
 build:
 	@echo "$(GREEN)Building $(BINARY_NAME)...$(NC)"
 	@echo "Version: $(VERSION)"

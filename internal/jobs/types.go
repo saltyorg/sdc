@@ -31,8 +31,8 @@ type Job struct {
 	Type      JobType   `json:"type"`
 	Status    JobStatus `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
-	StartedAt time.Time `json:"started_at,omitempty"`
-	EndedAt   time.Time `json:"ended_at,omitempty"`
+	StartedAt time.Time `json:"started_at"`
+	EndedAt   time.Time `json:"ended_at"`
 
 	// Operation parameters
 	Timeout int      `json:"timeout"`

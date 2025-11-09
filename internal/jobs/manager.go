@@ -330,10 +330,7 @@ func (m *Manager) cleanup() {
 		}
 
 		// Remove enough jobs to get under MaxJobCount
-		toRemove := totalJobs - MaxJobCount
-		if toRemove > len(eligible) {
-			toRemove = len(eligible)
-		}
+		toRemove := min(totalJobs-MaxJobCount, len(eligible))
 
 		removed := 0
 		for i := 0; i < toRemove; i++ {

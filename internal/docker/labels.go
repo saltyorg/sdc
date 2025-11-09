@@ -7,21 +7,21 @@ import (
 
 // ContainerLabels represents parsed Saltbox labels
 type ContainerLabels struct {
-	Managed            bool
-	DependsOn          []string
-	DependsOnDelay     int
+	Managed               bool
+	DependsOn             []string
+	DependsOnDelay        int
 	DependsOnHealthchecks bool
-	ControllerEnabled  bool
+	ControllerEnabled     bool
 }
 
 // ParseLabels extracts and parses Saltbox-specific labels from a container
 func ParseLabels(labels map[string]string) *ContainerLabels {
 	parsed := &ContainerLabels{
-		Managed:            false,
-		DependsOn:          []string{},
-		DependsOnDelay:     0,
+		Managed:               false,
+		DependsOn:             []string{},
+		DependsOnDelay:        0,
 		DependsOnHealthchecks: false,
-		ControllerEnabled:  true, // Default to enabled
+		ControllerEnabled:     true, // Default to enabled
 	}
 
 	// Check if container is managed
@@ -37,8 +37,8 @@ func ParseLabels(labels map[string]string) *ContainerLabels {
 	// Parse dependencies
 	if dependsOn, ok := labels["com.github.saltbox.depends_on"]; ok && dependsOn != "" {
 		// Split by comma and trim whitespace
-		deps := strings.Split(dependsOn, ",")
-		for _, dep := range deps {
+		deps := strings.SplitSeq(dependsOn, ",")
+		for dep := range deps {
 			trimmed := strings.TrimSpace(dep)
 			if trimmed != "" {
 				parsed.DependsOn = append(parsed.DependsOn, trimmed)

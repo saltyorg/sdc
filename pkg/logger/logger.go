@@ -20,19 +20,19 @@ func New(development bool) (*Logger, error) {
 
 // Helper methods for structured logging with level prefixes
 
-func (l *Logger) Info(msg string, keysAndValues ...interface{}) {
+func (l *Logger) Info(msg string, keysAndValues ...any) {
 	l.Printf("INFO: %s%s", msg, formatFields(keysAndValues...))
 }
 
-func (l *Logger) Error(msg string, keysAndValues ...interface{}) {
+func (l *Logger) Error(msg string, keysAndValues ...any) {
 	l.Printf("ERROR: %s%s", msg, formatFields(keysAndValues...))
 }
 
-func (l *Logger) Warn(msg string, keysAndValues ...interface{}) {
+func (l *Logger) Warn(msg string, keysAndValues ...any) {
 	l.Printf("WARN: %s%s", msg, formatFields(keysAndValues...))
 }
 
-func (l *Logger) Debug(msg string, keysAndValues ...interface{}) {
+func (l *Logger) Debug(msg string, keysAndValues ...any) {
 	if l.debug {
 		l.Printf("DEBUG: %s%s", msg, formatFields(keysAndValues...))
 	}
@@ -44,7 +44,7 @@ func (l *Logger) Sync() error {
 }
 
 // formatFields formats key-value pairs for logging
-func formatFields(keysAndValues ...interface{}) string {
+func formatFields(keysAndValues ...any) string {
 	if len(keysAndValues) == 0 {
 		return ""
 	}
@@ -62,6 +62,6 @@ func formatFields(keysAndValues ...interface{}) string {
 	return result
 }
 
-func formatField(key, value interface{}) string {
+func formatField(key, value any) string {
 	return fmt.Sprintf("%v=%v", key, value)
 }

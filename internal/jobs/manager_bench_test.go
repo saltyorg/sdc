@@ -6,8 +6,8 @@ import (
 
 // BenchmarkJobCreation benchmarks job creation
 func BenchmarkJobCreation(b *testing.B) {
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_ = NewJob(JobTypeStart, 600, nil)
 	}
 }
@@ -15,8 +15,8 @@ func BenchmarkJobCreation(b *testing.B) {
 // BenchmarkJobCreationWithIgnore benchmarks job creation with ignore list
 func BenchmarkJobCreationWithIgnore(b *testing.B) {
 	ignore := []string{"container1", "container2", "container3"}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_ = NewJob(JobTypeStart, 600, ignore)
 	}
 }
@@ -24,8 +24,8 @@ func BenchmarkJobCreationWithIgnore(b *testing.B) {
 // BenchmarkJobStatusUpdate benchmarks status updates
 func BenchmarkJobStatusUpdate(b *testing.B) {
 	job := NewJob(JobTypeStart, 600, nil)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		job.SetStatus(JobStatusRunning)
 		job.SetStatus(JobStatusCompleted)
 	}
@@ -35,8 +35,8 @@ func BenchmarkJobStatusUpdate(b *testing.B) {
 func BenchmarkJobGetStatus(b *testing.B) {
 	job := NewJob(JobTypeStart, 600, nil)
 	job.SetStatus(JobStatusRunning)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_ = job.GetStatus()
 	}
 }
@@ -45,8 +45,8 @@ func BenchmarkJobGetStatus(b *testing.B) {
 func BenchmarkJobResultUpdate(b *testing.B) {
 	job := NewJob(JobTypeStart, 600, nil)
 	started := []string{"container1", "container2", "container3"}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		job.Started = started
 		job.Stopped = started
 		job.Failed = started
