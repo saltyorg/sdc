@@ -108,9 +108,24 @@ func (o *Orchestrator) StartContainers(ctx context.Context, opts StartContainers
 				failed:  []string{},
 			}
 
-			o.logger.Info("Processing component",
-				"component", idx,
-				"batch_count", len(comp.Batches))
+			// Get container names for this component
+			var containerNames []string
+			for _, batch := range comp.Batches {
+				for _, node := range batch {
+					containerNames = append(containerNames, node.Name)
+				}
+			}
+
+			// Only log multi-container components at INFO level
+			if len(containerNames) > 1 {
+				o.logger.Info("Processing component",
+					"containers", containerNames,
+					"batch_count", len(comp.Batches))
+			} else {
+				o.logger.Debug("Processing component",
+					"containers", containerNames,
+					"batch_count", len(comp.Batches))
+			}
 
 			// Process batches sequentially (respecting dependencies between batches)
 			for batchIdx, batch := range comp.Batches {
@@ -243,9 +258,24 @@ func (o *Orchestrator) StopContainers(ctx context.Context, opts StopContainersOp
 				failed:  []string{},
 			}
 
-			o.logger.Info("Processing shutdown component",
-				"component", idx,
-				"batch_count", len(comp.Batches))
+			// Get container names for this component
+			var containerNames []string
+			for _, batch := range comp.Batches {
+				for _, node := range batch {
+					containerNames = append(containerNames, node.Name)
+				}
+			}
+
+			// Only log multi-container components at INFO level
+			if len(containerNames) > 1 {
+				o.logger.Info("Processing shutdown component",
+					"containers", containerNames,
+					"batch_count", len(comp.Batches))
+			} else {
+				o.logger.Debug("Processing shutdown component",
+					"containers", containerNames,
+					"batch_count", len(comp.Batches))
+			}
 
 			// Process batches sequentially (respecting dependencies between batches)
 			for batchIdx, batch := range comp.Batches {
