@@ -15,11 +15,11 @@ func TestParseLabels(t *testing.T) {
 		{
 			name: "fully configured container",
 			labels: map[string]string{
-				"com.github.saltbox.saltbox_managed":           "true",
-				"com.github.saltbox.depends_on":                "traefik,redis",
-				"com.github.saltbox.depends_on.delay":          "10",
-				"com.github.saltbox.depends_on.healthchecks":   "true",
-				"com.github.saltbox.saltbox_controller":        "true",
+				"com.github.saltbox.saltbox_managed":         "true",
+				"com.github.saltbox.depends_on":              "traefik,redis",
+				"com.github.saltbox.depends_on.delay":        "10",
+				"com.github.saltbox.depends_on.healthchecks": "true",
+				"com.github.saltbox.saltbox_controller":      "true",
 			},
 			expected: &ContainerLabels{
 				Managed:               true,

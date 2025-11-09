@@ -101,8 +101,8 @@ func (s *Server) HandleStopContainers(w http.ResponseWriter, r *http.Request) {
 	if ignoreParams := query["ignore"]; len(ignoreParams) > 0 {
 		for _, param := range ignoreParams {
 			// Also support comma-separated within each param: ?ignore=traefik,nginx
-			parts := strings.Split(param, ",")
-			for _, part := range parts {
+			parts := strings.SplitSeq(param, ",")
+			for part := range parts {
 				if trimmed := strings.TrimSpace(part); trimmed != "" {
 					ignore = append(ignore, trimmed)
 				}
@@ -145,7 +145,7 @@ func (s *Server) HandleGetJob(w http.ResponseWriter, r *http.Request) {
 // HandleListJobs handles GET /api/v1/jobs
 func (s *Server) HandleListJobs(w http.ResponseWriter, r *http.Request) {
 	jobs := s.jobManager.List()
-	s.writeJSON(w, http.StatusOK, map[string]interface{}{
+	s.writeJSON(w, http.StatusOK, map[string]any{
 		"jobs":  jobs,
 		"count": len(jobs),
 	})
@@ -173,7 +173,7 @@ func (s *Server) HandleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 // writeJSON writes a JSON response
-func (s *Server) writeJSON(w http.ResponseWriter, status int, data interface{}) {
+func (s *Server) writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 

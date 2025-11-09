@@ -137,7 +137,7 @@ func TestJob_GetStatus_ThreadSafe(t *testing.T) {
 
 	// Test concurrent reads
 	done := make(chan bool)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go func() {
 			status := job.GetStatus()
 			assert.Equal(t, JobStatusPending, status)
@@ -145,7 +145,7 @@ func TestJob_GetStatus_ThreadSafe(t *testing.T) {
 		}()
 	}
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 }
@@ -155,14 +155,14 @@ func TestJob_SetStatus_ThreadSafe(t *testing.T) {
 
 	// Test concurrent writes
 	done := make(chan bool)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go func() {
 			job.SetStatus(JobStatusRunning)
 			done <- true
 		}()
 	}
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 

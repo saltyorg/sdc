@@ -199,7 +199,7 @@ func TestGetConnectedComponentsForShutdown(t *testing.T) {
 
 // Helper functions
 func sortIntSlice(s []int) {
-	for i := 0; i < len(s); i++ {
+	for i := range s {
 		for j := i + 1; j < len(s); j++ {
 			if s[i] > s[j] {
 				s[i], s[j] = s[j], s[i]

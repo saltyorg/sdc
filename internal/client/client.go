@@ -48,8 +48,8 @@ type Job struct {
 	Type      string    `json:"type"`
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
-	StartedAt time.Time `json:"started_at,omitempty"`
-	EndedAt   time.Time `json:"ended_at,omitempty"`
+	StartedAt time.Time `json:"started_at"`
+	EndedAt   time.Time `json:"ended_at"`
 	Timeout   int       `json:"timeout"`
 	Ignore    []string  `json:"ignore,omitempty"`
 	Started   []string  `json:"started,omitempty"`
@@ -185,7 +185,7 @@ func (c *Client) WaitForServerReady(ctx context.Context, timeout time.Duration) 
 }
 
 // post performs a POST request
-func (c *Client) post(ctx context.Context, path string, body interface{}, result interface{}) error {
+func (c *Client) post(ctx context.Context, path string, body any, result any) error {
 	data, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
@@ -218,7 +218,7 @@ func (c *Client) post(ctx context.Context, path string, body interface{}, result
 }
 
 // get performs a GET request
-func (c *Client) get(ctx context.Context, path string, result interface{}) error {
+func (c *Client) get(ctx context.Context, path string, result any) error {
 	url := c.baseURL + path
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

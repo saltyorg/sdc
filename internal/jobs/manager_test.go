@@ -193,7 +193,7 @@ func TestManager_Cleanup_MaxJobCount(t *testing.T) {
 
 	// Add more than MaxJobCount old jobs
 	mgr.jobsMu.Lock()
-	for i := 0; i < MaxJobCount+10; i++ {
+	for range MaxJobCount + 10 {
 		job := NewJob(JobTypeStart, 600, nil)
 		job.CreatedAt = time.Now().Add(-2 * time.Hour)
 		job.SetStatus(JobStatusCompleted)

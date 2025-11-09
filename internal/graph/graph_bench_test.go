@@ -64,8 +64,7 @@ func BenchmarkBuildGraph(b *testing.B) {
 		},
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := builder.Build(context.Background(), containers)
 		if err != nil {
 			b.Fatal(err)
@@ -81,8 +80,8 @@ func BenchmarkBuildLargeGraph(b *testing.B) {
 
 	// Create 100 containers with dependencies
 	containers := make([]container.Summary, 100)
-	for i := 0; i < 100; i++ {
-		name := string(rune('a' + (i % 26))) + string(rune('0' + (i / 26)))
+	for i := range 100 {
+		name := string(rune('a'+(i%26))) + string(rune('0'+(i/26)))
 		cont := container.Summary{
 			Names:  []string{"/" + name},
 			Labels: map[string]string{"com.github.saltbox.saltbox_managed": "true"},
@@ -97,8 +96,7 @@ func BenchmarkBuildLargeGraph(b *testing.B) {
 		containers[i] = cont
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := builder.Build(context.Background(), containers)
 		if err != nil {
 			b.Fatal(err)
@@ -124,8 +122,7 @@ func BenchmarkTopologicalSort(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := g.GetStartupBatches()
 		if err != nil {
 			b.Fatal(err)
@@ -150,8 +147,7 @@ func BenchmarkCircularDependencyDetection(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = g.GetStartupBatches() // Will return error due to circular dependency
 	}
 }
