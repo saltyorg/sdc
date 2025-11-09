@@ -1,10 +1,13 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/saltyorg/sdc/internal/jobs"
@@ -13,8 +16,12 @@ import (
 
 // Server represents the API server
 type Server struct {
-	jobManager *jobs.Manager
-	logger     *logger.Logger
+	jobManager      *jobs.Manager
+	logger          *logger.Logger
+	isBlocked       bool
+	blockMutex      sync.RWMutex
+	unblockTimer    *time.Timer
+	unblockCancel   context.CancelFunc
 }
 
 // NewServer creates a new API server
@@ -38,6 +45,10 @@ func (s *Server) Router() http.Handler {
 	r.Post("/stop", s.HandleStopContainers)
 	r.Get("/ping", s.HandleHealth)
 
+	// Block/unblock routes
+	r.Post("/block/{duration}", s.HandleBlock)
+	r.Post("/unblock", s.HandleUnblock)
+
 	// Job management routes
 	r.Get("/jobs", s.HandleListJobs)
 	r.Get("/jobs/{id}", s.HandleGetJob)
@@ -58,6 +69,16 @@ type ErrorResponse struct {
 
 // HandleStartContainers handles POST /start
 func (s *Server) HandleStartContainers(w http.ResponseWriter, r *http.Request) {
+	// Check if operations are blocked
+	s.blockMutex.RLock()
+	blocked := s.isBlocked
+	s.blockMutex.RUnlock()
+
+	if blocked {
+		s.writeError(w, http.StatusServiceUnavailable, "Operation blocked")
+		return
+	}
+
 	// Parse query parameters
 	timeout := 600 // 10 minutes default
 	if timeoutStr := r.URL.Query().Get("timeout"); timeoutStr != "" {
@@ -85,6 +106,16 @@ func (s *Server) HandleStartContainers(w http.ResponseWriter, r *http.Request) {
 
 // HandleStopContainers handles POST /stop
 func (s *Server) HandleStopContainers(w http.ResponseWriter, r *http.Request) {
+	// Check if operations are blocked
+	s.blockMutex.RLock()
+	blocked := s.isBlocked
+	s.blockMutex.RUnlock()
+
+	if blocked {
+		s.writeError(w, http.StatusServiceUnavailable, "Operation blocked")
+		return
+	}
+
 	// Parse timeout query parameter
 	timeout := 300 // 5 minutes default
 	if timeoutStr := r.URL.Query().Get("timeout"); timeoutStr != "" {
@@ -169,6 +200,76 @@ func (s *Server) HandleDeleteJob(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, map[string]string{
 		"status": "healthy",
+	})
+}
+
+// HandleBlock handles POST /block/{duration}
+func (s *Server) HandleBlock(w http.ResponseWriter, r *http.Request) {
+	// Parse duration from URL parameter (in minutes)
+	durationStr := chi.URLParam(r, "duration")
+	duration := 10 // Default 10 minutes
+	if durationStr != "" {
+		if parsedDuration, err := strconv.Atoi(durationStr); err == nil {
+			duration = parsedDuration
+		}
+	}
+
+	s.blockMutex.Lock()
+	defer s.blockMutex.Unlock()
+
+	// Cancel any existing unblock timer
+	if s.unblockCancel != nil {
+		s.unblockCancel()
+	}
+
+	// Set blocked state
+	s.isBlocked = true
+
+	// Create context for auto-unblock
+	ctx, cancel := context.WithCancel(context.Background())
+	s.unblockCancel = cancel
+
+	// Start auto-unblock timer
+	go func() {
+		timer := time.NewTimer(time.Duration(duration) * time.Minute)
+		defer timer.Stop()
+
+		select {
+		case <-timer.C:
+			s.blockMutex.Lock()
+			s.isBlocked = false
+			s.unblockCancel = nil
+			s.blockMutex.Unlock()
+			s.logger.Info("Auto unblock complete")
+		case <-ctx.Done():
+			// Timer was cancelled
+			return
+		}
+	}()
+
+	s.logger.Info("Operations are now blocked", "duration_minutes", duration)
+	s.writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Operations are now blocked for " + strconv.Itoa(duration) + " minutes",
+	})
+}
+
+// HandleUnblock handles POST /unblock
+func (s *Server) HandleUnblock(w http.ResponseWriter, r *http.Request) {
+	s.blockMutex.Lock()
+	defer s.blockMutex.Unlock()
+
+	// Cancel auto-unblock timer if exists
+	if s.unblockCancel != nil {
+		s.unblockCancel()
+		s.unblockCancel = nil
+	}
+
+	// Unblock operations
+	s.isBlocked = false
+
+	s.logger.Info("Operations are now unblocked")
+	s.writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Operations are now unblocked",
 	})
 }
 

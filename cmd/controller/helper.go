@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -65,27 +66,32 @@ func runHelper(cmd *cobra.Command, args []string) error {
 	log.Info("Submitting container start job")
 	startResp, err := apiClient.StartContainers(ctx, helperConfig.Timeout, nil)
 	if err != nil {
-		return fmt.Errorf("failed to submit start job: %w", err)
-	}
-
-	log.Info("Start job submitted, waiting for completion",
-		"job_id", startResp.ID)
-
-	// Wait for job to complete
-	startJob, err := apiClient.WaitForJob(ctx, startResp.ID, helperConfig.PollInterval)
-	if err != nil {
-		return fmt.Errorf("failed to wait for start job: %w", err)
-	}
-
-	if startJob.Status == "failed" {
-		log.Error("Start job failed",
-			"error", startJob.Error,
-			"failed", startJob.Failed)
+		// Check if operations are blocked (503 error)
+		if isOperationBlocked(err) {
+			log.Info("Container start operation is currently blocked, skipping")
+		} else {
+			return fmt.Errorf("failed to submit start job: %w", err)
+		}
 	} else {
-		log.Info("Containers started successfully",
-			"started", startJob.Started,
-			"skipped", startJob.Skipped,
-			"failed", startJob.Failed)
+		log.Info("Start job submitted, waiting for completion",
+			"job_id", startResp.ID)
+
+		// Wait for job to complete
+		startJob, err := apiClient.WaitForJob(ctx, startResp.ID, helperConfig.PollInterval)
+		if err != nil {
+			return fmt.Errorf("failed to wait for start job: %w", err)
+		}
+
+		if startJob.Status == "failed" {
+			log.Error("Start job failed",
+				"error", startJob.Error,
+				"failed", startJob.Failed)
+		} else {
+			log.Info("Containers started successfully",
+				"started", startJob.Started,
+				"skipped", startJob.Skipped,
+				"failed", startJob.Failed)
+		}
 	}
 
 	// Setup signal handler for graceful stop
@@ -101,31 +107,45 @@ func runHelper(cmd *cobra.Command, args []string) error {
 	// Submit stop job
 	stopResp, err := apiClient.StopContainers(ctx, helperConfig.Timeout, nil)
 	if err != nil {
-		log.Error("Failed to submit stop job", "error", err)
-		return err
-	}
-
-	log.Info("Stop job submitted, waiting for completion",
-		"job_id", stopResp.ID)
-
-	// Wait for stop job to complete
-	stopJob, err := apiClient.WaitForJob(ctx, stopResp.ID, helperConfig.PollInterval)
-	if err != nil {
-		log.Error("Failed to wait for stop job", "error", err)
-		return err
-	}
-
-	if stopJob.Status == "failed" {
-		log.Error("Stop job failed",
-			"error", stopJob.Error,
-			"failed", stopJob.Failed)
+		// Check if operations are blocked (503 error)
+		if isOperationBlocked(err) {
+			log.Info("Container stop operation is currently blocked, skipping")
+		} else {
+			log.Error("Failed to submit stop job", "error", err)
+			return err
+		}
 	} else {
-		log.Info("Containers stopped successfully",
-			"stopped", stopJob.Stopped,
-			"skipped", stopJob.Skipped,
-			"failed", stopJob.Failed)
+		log.Info("Stop job submitted, waiting for completion",
+			"job_id", stopResp.ID)
+
+		// Wait for stop job to complete
+		stopJob, err := apiClient.WaitForJob(ctx, stopResp.ID, helperConfig.PollInterval)
+		if err != nil {
+			log.Error("Failed to wait for stop job", "error", err)
+			return err
+		}
+
+		if stopJob.Status == "failed" {
+			log.Error("Stop job failed",
+				"error", stopJob.Error,
+				"failed", stopJob.Failed)
+		} else {
+			log.Info("Containers stopped successfully",
+				"stopped", stopJob.Stopped,
+				"skipped", stopJob.Skipped,
+				"failed", stopJob.Failed)
+		}
 	}
 
 	log.Info("Helper shutdown complete")
 	return nil
+}
+
+// isOperationBlocked checks if the error is due to operations being blocked (503)
+func isOperationBlocked(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Check if error contains "503" status code
+	return strings.Contains(err.Error(), "status 503") || strings.Contains(err.Error(), "Operation blocked")
 }
