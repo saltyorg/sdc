@@ -236,3 +236,77 @@ func TestExecutorTreatsDisabledHealthcheckAsNoHealthcheck(t *testing.T) {
 	assert.Equal(t, []string{"start:application"}, runtime.eventLog())
 	assert.NoError(t, result.Err)
 }
+
+func TestExecutorFailsJobWhenDependencyIsMissing(t *testing.T) {
+	runtime := newFakeRuntime(testContainer("application", false, "database"))
+
+	result := newExecutor(runtime, testLogger(t), 1).execute(t.Context(), Request{
+		Operation: OperationStart,
+		Timeout:   time.Minute,
+	})
+
+	require.Error(t, result.Err)
+	indexed := resultsByContainer(result.Outcomes)
+	assert.Equal(t, OutcomeBlocked, indexed["application"].Outcome)
+	assert.Equal(t, ReasonMissingDependency, indexed["application"].Reason)
+	assert.Equal(t, "database", indexed["application"].Error)
+}
+
+func TestExecutorProtectsParentWhenChildStopFails(t *testing.T) {
+	runtime := newFakeRuntime(
+		testContainer("database", true),
+		testContainer("application", true, "database"),
+	)
+	runtime.stopErr["application"] = errors.New("stop failed")
+
+	result := newExecutor(runtime, testLogger(t), 2).execute(t.Context(), Request{
+		Operation: OperationStop,
+		Timeout:   time.Minute,
+	})
+
+	require.Error(t, result.Err)
+	indexed := resultsByContainer(result.Outcomes)
+	assert.Equal(t, OutcomeFailed, indexed["application"].Outcome)
+	assert.Equal(t, OutcomeBlocked, indexed["database"].Outcome)
+	assert.Equal(t, []string{"stop:application"}, runtime.eventLog())
+}
+
+func TestExecutorFailsDependentWhenConfiguredHealthNeverBecomesHealthy(t *testing.T) {
+	database := testContainer("database", true)
+	application := testContainer("application", false, "database")
+	application.Labels[healthWaitLabel] = "true"
+	runtime := newFakeRuntime(database, application)
+	runtime.states["database"] = ContainerState{
+		Running:     true,
+		Healthcheck: HealthcheckConfigured,
+		Health:      HealthUnhealthy,
+	}
+	executor := newExecutor(runtime, testLogger(t), 1)
+	executor.pollInterval = time.Millisecond
+
+	result := executor.execute(t.Context(), Request{Operation: OperationStart, Timeout: 5 * time.Millisecond})
+
+	require.Error(t, result.Err)
+	indexed := resultsByContainer(result.Outcomes)
+	assert.Equal(t, OutcomeBlocked, indexed["application"].Outcome)
+	assert.Equal(t, ReasonDependencyUnhealthy, indexed["application"].Reason)
+}
+
+func TestExecutorReportsDependencyCycleForEveryContainer(t *testing.T) {
+	runtime := newFakeRuntime(
+		testContainer("application", false, "database"),
+		testContainer("database", false, "application"),
+	)
+
+	result := newExecutor(runtime, testLogger(t), 1).execute(t.Context(), Request{
+		Operation: OperationStart,
+		Timeout:   time.Minute,
+	})
+
+	require.Error(t, result.Err)
+	require.Len(t, result.Outcomes, 2)
+	for _, outcome := range result.Outcomes {
+		assert.Equal(t, OutcomeBlocked, outcome.Outcome)
+		assert.Equal(t, ReasonDependencyCycle, outcome.Reason)
+	}
+}

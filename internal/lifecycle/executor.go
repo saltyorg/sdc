@@ -43,6 +43,19 @@ func (e *executor) execute(parent context.Context, request Request) ExecutionRes
 	}
 	plan, err := buildPlan(containers)
 	if err != nil {
+		var cycle *cycleError
+		if errors.As(err, &cycle) && plan != nil {
+			outcomes := make([]ContainerResult, 0, len(plan.nodes))
+			for _, current := range plan.nodes {
+				outcomes = append(outcomes, ContainerResult{
+					Container: current.container.Name,
+					Outcome:   OutcomeBlocked,
+					Reason:    ReasonDependencyCycle,
+					Error:     err.Error(),
+				})
+			}
+			return ExecutionResult{Outcomes: outcomes, Err: err}
+		}
 		return ExecutionResult{Err: err}
 	}
 

@@ -217,7 +217,7 @@ func TestClient_WaitForServerReady(t *testing.T) {
 
 		// Become healthy after 2 calls
 		if callCount >= 2 {
-			resp := HealthResponse{Status: "healthy"}
+			resp := HealthResponse{Status: "ready"}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(resp)
 		} else {

@@ -82,6 +82,10 @@ func buildPlan(containers []Container) (*executionPlan, error) {
 		}
 		sort.Strings(current.missing)
 	}
+	nodes := make([]*node, 0, len(names))
+	for _, name := range names {
+		nodes = append(nodes, nodesByName[name])
+	}
 
 	indegree := make(map[string]int, len(nodesByName))
 	ready := make([]*node, 0)
@@ -118,16 +122,12 @@ func buildPlan(containers []Container) (*executionPlan, error) {
 				cycle = append(cycle, name)
 			}
 		}
-		return nil, &cycleError{containers: cycle}
+		return &executionPlan{nodes: nodes}, &cycleError{containers: cycle}
 	}
 
 	shutdown := make([][]*node, len(batches))
 	for i, batch := range batches {
 		shutdown[len(batches)-1-i] = batch
-	}
-	nodes := make([]*node, 0, len(names))
-	for _, name := range names {
-		nodes = append(nodes, nodesByName[name])
 	}
 	return &executionPlan{nodes: nodes, startup: batches, shutdown: shutdown}, nil
 }

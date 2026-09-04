@@ -15,8 +15,3 @@ type HelperConfig struct {
 	Timeout       int
 	PollInterval  time.Duration
 }
-
-// DockerConfig holds Docker client configuration
-type DockerConfig struct {
-	Host string
-}

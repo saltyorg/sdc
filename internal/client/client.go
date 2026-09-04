@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/saltyorg/sdc/pkg/logger"
 )
+
+const maxErrorBodyBytes = 64 << 10
 
 // Client represents an HTTP client for communicating with the controller server
 type Client struct {
@@ -39,8 +42,9 @@ func (c *Client) SetUserAgent(userAgent string) {
 
 // JobRequest represents a request to start or stop containers
 type JobRequest struct {
-	Timeout int      `json:"timeout"`
-	Ignore  []string `json:"ignore,omitempty"`
+	Timeout  int      `json:"timeout"`
+	Ignore   []string `json:"ignore,omitempty"`
+	Shutdown bool     `json:"shutdown,omitempty"`
 }
 
 // JobResponse represents a job creation response
@@ -51,19 +55,36 @@ type JobResponse struct {
 
 // Job represents a job's full state
 type Job struct {
-	ID        string    `json:"id"`
-	Type      string    `json:"type"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	StartedAt time.Time `json:"started_at"`
-	EndedAt   time.Time `json:"ended_at"`
-	Timeout   int       `json:"timeout"`
-	Ignore    []string  `json:"ignore,omitempty"`
-	Started   []string  `json:"started,omitempty"`
-	Stopped   []string  `json:"stopped,omitempty"`
-	Skipped   []string  `json:"skipped,omitempty"`
-	Failed    []string  `json:"failed,omitempty"`
-	Error     string    `json:"error,omitempty"`
+	ID        string            `json:"id"`
+	Type      string            `json:"type"`
+	Status    string            `json:"status"`
+	CreatedAt time.Time         `json:"created_at"`
+	StartedAt time.Time         `json:"started_at"`
+	EndedAt   time.Time         `json:"ended_at"`
+	Timeout   int               `json:"timeout"`
+	Ignore    []string          `json:"ignore,omitempty"`
+	Started   []string          `json:"started,omitempty"`
+	Stopped   []string          `json:"stopped,omitempty"`
+	Skipped   []string          `json:"skipped,omitempty"`
+	Failed    []string          `json:"failed,omitempty"`
+	Outcomes  []ContainerResult `json:"outcomes,omitempty"`
+	Error     string            `json:"error,omitempty"`
+}
+
+type ContainerResult struct {
+	Container string `json:"container"`
+	Outcome   string `json:"outcome"`
+	Reason    string `json:"reason,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+type HTTPError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("request failed with status %d: %s", e.StatusCode, e.Body)
 }
 
 // HealthResponse represents the health check response
@@ -92,9 +113,19 @@ func (c *Client) StartContainers(ctx context.Context, timeout int, ignore []stri
 
 // StopContainers submits a job to stop containers
 func (c *Client) StopContainers(ctx context.Context, timeout int, ignore []string) (*JobResponse, error) {
+	return c.stopContainers(ctx, timeout, ignore, false)
+}
+
+// StopContainersForShutdown submits the stop operation that gates helper shutdown.
+func (c *Client) StopContainersForShutdown(ctx context.Context, timeout int, ignore []string) (*JobResponse, error) {
+	return c.stopContainers(ctx, timeout, ignore, true)
+}
+
+func (c *Client) stopContainers(ctx context.Context, timeout int, ignore []string, shutdown bool) (*JobResponse, error) {
 	req := JobRequest{
-		Timeout: timeout,
-		Ignore:  ignore,
+		Timeout:  timeout,
+		Ignore:   ignore,
+		Shutdown: shutdown,
 	}
 
 	var resp JobResponse
@@ -125,26 +156,22 @@ func (c *Client) WaitForJob(ctx context.Context, jobID string, pollInterval time
 		return nil, fmt.Errorf("poll interval must be greater than 0")
 	}
 
-	ticker := time.NewTicker(pollInterval)
-	defer ticker.Stop()
-
 	for {
+		job, err := c.GetJob(ctx, jobID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get job status: %w", err)
+		}
+		c.logger.Debug("Job status", "job_id", jobID, "status", job.Status)
+		if job.Status == "completed" || job.Status == "failed" {
+			return job, nil
+		}
+
+		timer := time.NewTimer(pollInterval)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return nil, ctx.Err()
-		case <-ticker.C:
-			job, err := c.GetJob(ctx, jobID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get job status: %w", err)
-			}
-
-			c.logger.Debug("Job status",
-				"job_id", jobID,
-				"status", job.Status)
-
-			if job.Status == "completed" || job.Status == "failed" {
-				return job, nil
-			}
+		case <-timer.C:
 		}
 	}
 }
@@ -163,34 +190,44 @@ func (c *Client) Health(ctx context.Context) error {
 	return nil
 }
 
+// Ready checks operational readiness and falls back to the v1 liveness route.
+func (c *Client) Ready(ctx context.Context) error {
+	var response HealthResponse
+	if err := c.get(ctx, "/ready", &response); err != nil {
+		var httpErr *HTTPError
+		if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound {
+			return c.Health(ctx)
+		}
+		return err
+	}
+	if response.Status != "ready" {
+		return fmt.Errorf("server is not ready: %s", response.Status)
+	}
+	return nil
+}
+
 // WaitForServerReady waits for the server to become ready
 func (c *Client) WaitForServerReady(ctx context.Context, timeout time.Duration) error {
 	c.logger.Info("Waiting for server to become ready",
 		"url", c.baseURL,
 		"timeout", timeout)
 
-	deadline := time.Now().Add(timeout)
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
+	readyCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 
 	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			if time.Now().After(deadline) {
-				return fmt.Errorf("timeout waiting for server to become ready")
-			}
-
-			if err := c.Health(ctx); err != nil {
-				c.logger.Debug("Server not ready yet",
-					"error", err,
-					"remaining", time.Until(deadline))
-				continue
-			}
-
+		if err := c.Ready(readyCtx); err == nil {
 			c.logger.Info("Server is ready")
 			return nil
+		} else {
+			c.logger.Debug("Server not ready yet", "error", err)
+		}
+		timer := time.NewTimer(time.Second)
+		select {
+		case <-readyCtx.Done():
+			timer.Stop()
+			return fmt.Errorf("timeout waiting for server to become ready: %w", readyCtx.Err())
+		case <-timer.C:
 		}
 	}
 }
@@ -218,8 +255,8 @@ func (c *Client) post(ctx context.Context, path string, body any, result any) er
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
+		return &HTTPError{StatusCode: resp.StatusCode, Body: string(bodyBytes)}
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
@@ -246,8 +283,8 @@ func (c *Client) get(ctx context.Context, path string, result any) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
+		return &HTTPError{StatusCode: resp.StatusCode, Body: string(bodyBytes)}
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
