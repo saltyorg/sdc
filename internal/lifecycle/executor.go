@@ -39,6 +39,13 @@ func (e *executor) execute(parent context.Context, request Request) ExecutionRes
 
 	containers, err := e.runtime.ListContainers(ctx)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
+			cause := ctx.Err()
+			if cause == nil {
+				cause = err
+			}
+			return e.canceledSnapshot(parent, cause)
+		}
 		return ExecutionResult{Err: fmt.Errorf("listing containers: %w", err)}
 	}
 	plan, err := buildPlan(containers)
@@ -89,6 +96,40 @@ func (e *executor) execute(parent context.Context, request Request) ExecutionRes
 		}
 	}
 	return ExecutionResult{Outcomes: outcomes}
+}
+
+func (e *executor) canceledSnapshot(parent context.Context, cause error) ExecutionResult {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), 5*time.Second)
+	defer cancel()
+	containers, err := e.runtime.ListContainers(ctx)
+	if err != nil {
+		return ExecutionResult{Err: errors.Join(cause, fmt.Errorf("listing containers for cancellation results: %w", err))}
+	}
+	reason := ReasonCanceledByShutdown
+	if errors.Is(cause, context.DeadlineExceeded) {
+		reason = ReasonDeadlineExceeded
+	}
+	seen := make(map[string]struct{})
+	outcomes := make([]ContainerResult, 0, len(containers))
+	for _, container := range containers {
+		if !managed(container.Labels) {
+			continue
+		}
+		name := container.Name
+		if name == "" {
+			name = container.ID
+		}
+		if name == "" {
+			continue
+		}
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		seen[name] = struct{}{}
+		outcomes = append(outcomes, ContainerResult{Container: name, Outcome: OutcomeCanceled, Reason: reason, Error: cause.Error()})
+	}
+	sort.Slice(outcomes, func(i, j int) bool { return outcomes[i].Container < outcomes[j].Container })
+	return ExecutionResult{Outcomes: outcomes, Err: cause}
 }
 
 func (e *executor) runBatch(ctx context.Context, batch []*node, run func(context.Context, *node) nodeResult) []nodeResult {

@@ -22,6 +22,7 @@ type fakeRuntime struct {
 	mu sync.Mutex
 
 	containers []Container
+	listErrors []error
 	states     map[string]ContainerState
 	inspectErr map[string]error
 	startErr   map[string]error
@@ -51,6 +52,11 @@ func newFakeRuntime(containers ...Container) *fakeRuntime {
 func (f *fakeRuntime) ListContainers(context.Context) ([]Container, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if len(f.listErrors) > 0 {
+		err := f.listErrors[0]
+		f.listErrors = f.listErrors[1:]
+		return nil, err
+	}
 	return append([]Container(nil), f.containers...), nil
 }
 
@@ -326,4 +332,26 @@ func TestExecutorReportsCanceledInspectionAsCanceled(t *testing.T) {
 	require.Len(t, result.Outcomes, 1)
 	assert.Equal(t, OutcomeCanceled, result.Outcomes[0].Outcome)
 	assert.Equal(t, ReasonCanceledByShutdown, result.Outcomes[0].Reason)
+}
+
+func TestExecutorReportsCanceledSnapshotForEveryManagedContainer(t *testing.T) {
+	runtime := newFakeRuntime(
+		testContainer("application", false),
+		testContainer("database", true),
+	)
+	runtime.listErrors = []error{context.Canceled}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	result := newExecutor(runtime, testLogger(t), 1).execute(ctx, Request{
+		Operation: OperationStart,
+		Timeout:   time.Minute,
+	})
+
+	require.ErrorIs(t, result.Err, context.Canceled)
+	require.Len(t, result.Outcomes, 2)
+	for _, outcome := range result.Outcomes {
+		assert.Equal(t, OutcomeCanceled, outcome.Outcome)
+		assert.Equal(t, ReasonCanceledByShutdown, outcome.Reason)
+	}
 }
