@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
+	"github.com/saltyorg/sdc/internal/lifecycle"
 	"github.com/saltyorg/sdc/pkg/logger"
 )
 
@@ -148,6 +150,68 @@ func (c *Client) Ping(ctx context.Context) error {
 	return err
 }
 
+// ListContainers returns the managed containers and the configuration needed
+// to build a lifecycle plan.
+func (c *Client) ListContainers(ctx context.Context) ([]lifecycle.Container, error) {
+	containers, err := c.ListManagedContainers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]lifecycle.Container, 0, len(containers))
+	for _, summary := range containers {
+		name := summary.ID
+		for _, candidate := range summary.Names {
+			candidate = strings.TrimPrefix(candidate, "/")
+			if candidate != "" {
+				name = candidate
+				break
+			}
+		}
+
+		inspected, err := c.GetContainer(ctx, summary.ID)
+		if err != nil {
+			return nil, fmt.Errorf("loading lifecycle configuration for %s: %w", name, err)
+		}
+		var stopTimeout *time.Duration
+		if inspected.Container.Config != nil && inspected.Container.Config.StopTimeout != nil {
+			duration := time.Duration(*inspected.Container.Config.StopTimeout) * time.Second
+			stopTimeout = &duration
+		}
+		result = append(result, lifecycle.Container{
+			ID:          summary.ID,
+			Name:        name,
+			Labels:      summary.Labels,
+			Running:     summary.State == "running",
+			StopTimeout: stopTimeout,
+		})
+	}
+	return result, nil
+}
+
+// InspectContainer returns the current state needed by lifecycle execution.
+func (c *Client) InspectContainer(ctx context.Context, containerID string) (lifecycle.ContainerState, error) {
+	inspected, err := c.GetContainer(ctx, containerID)
+	if err != nil {
+		return lifecycle.ContainerState{}, err
+	}
+
+	state := lifecycle.ContainerState{Running: inspected.Container.State.Running}
+	if inspected.Container.Config == nil || inspected.Container.Config.Healthcheck == nil {
+		state.Healthcheck = lifecycle.HealthcheckNone
+	} else if tests := inspected.Container.Config.Healthcheck.Test; len(tests) > 0 && strings.EqualFold(tests[0], "NONE") {
+		state.Healthcheck = lifecycle.HealthcheckDisabled
+	} else {
+		state.Healthcheck = lifecycle.HealthcheckConfigured
+	}
+	if inspected.Container.State.Health == nil {
+		state.Health = lifecycle.HealthNone
+	} else {
+		state.Health = lifecycle.Health(inspected.Container.State.Health.Status)
+	}
+	return state, nil
+}
+
 // ListManagedContainers returns all containers with saltbox_managed=true label
 func (c *Client) ListManagedContainers(ctx context.Context) ([]container.Summary, error) {
 	filters := make(client.Filters).Add("label", "com.github.saltbox.saltbox_managed=true")
@@ -185,9 +249,10 @@ func (c *Client) StartContainer(ctx context.Context, containerID string) error {
 }
 
 // StopContainer stops a container by name or ID
-func (c *Client) StopContainer(ctx context.Context, containerID string, timeout int) error {
+func (c *Client) StopContainer(ctx context.Context, containerID string, timeout time.Duration) error {
+	timeoutSeconds := int(timeout / time.Second)
 	_, err := c.cli.ContainerStop(ctx, containerID, client.ContainerStopOptions{
-		Timeout: &timeout,
+		Timeout: &timeoutSeconds,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to stop container %s: %w", containerID, err)

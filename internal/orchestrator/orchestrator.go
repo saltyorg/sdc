@@ -534,7 +534,7 @@ func (o *Orchestrator) stopContainer(ctx context.Context, node *graph.Node) erro
 	}
 
 	// Stop the container
-	if err := o.docker.StopContainer(ctx, node.ID, timeout); err != nil {
+	if err := o.docker.StopContainer(ctx, node.ID, time.Duration(timeout)*time.Second); err != nil {
 		return fmt.Errorf("failed to stop container: %w", err)
 	}
 
