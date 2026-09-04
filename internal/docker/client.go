@@ -35,7 +35,7 @@ func defaultConnectionConfig() connectionConfig {
 
 // New connects to Saltbox's local rootful Docker daemon.
 func New(ctx context.Context, logger *logger.Logger) (*Client, error) {
-	return newWithConfig(ctx, logger, defaultConnectionConfig(), client.WithAPIVersionNegotiation())
+	return newWithConfig(ctx, logger, defaultConnectionConfig())
 }
 
 func newWithConfig(ctx context.Context, logger *logger.Logger, cfg connectionConfig, opts ...client.Opt) (*Client, error) {

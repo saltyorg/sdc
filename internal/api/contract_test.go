@@ -70,7 +70,7 @@ func TestStartPreservesV1ResponseAndAddsPendingStatus(t *testing.T) {
 	controller := &fakeLifecycleController{}
 	router := NewServer(controller, apiTestLogger(t)).Router()
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/start?timeout=42", bytes.NewBufferString(`{"ignore":["traefik"]}`))
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/start?timeout=42", bytes.NewBufferString(`{"ignore":["traefik"]}`))
 
 	router.ServeHTTP(recorder, request)
 
@@ -86,7 +86,7 @@ func TestStopAcceptsExplicitShutdownIntent(t *testing.T) {
 	controller := &fakeLifecycleController{}
 	router := NewServer(controller, apiTestLogger(t)).Router()
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/stop", bytes.NewBufferString(`{"shutdown":true}`))
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/stop", bytes.NewBufferString(`{"shutdown":true}`))
 
 	router.ServeHTTP(recorder, request)
 
@@ -107,7 +107,7 @@ func TestJobStatusPreservesLegacyFieldsAndAddsOutcomes(t *testing.T) {
 	router := NewServer(controller, apiTestLogger(t)).Router()
 	recorder := httptest.NewRecorder()
 
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/job_status/job-1", nil))
+	router.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/job_status/job-1", nil))
 
 	assert.Equal(t, http.StatusOK, recorder.Code)
 	response := decodeResponse[Job](t, recorder)
@@ -139,7 +139,7 @@ func TestRequestsRejectMalformedOrUnsafeInput(t *testing.T) {
 			controller := &fakeLifecycleController{}
 			router := NewServer(controller, apiTestLogger(t)).Router()
 			recorder := httptest.NewRecorder()
-			request := httptest.NewRequest(http.MethodPost, test.path, bytes.NewBufferString(test.body))
+			request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, test.path, bytes.NewBufferString(test.body))
 
 			router.ServeHTTP(recorder, request)
 
@@ -154,11 +154,11 @@ func TestReadySeparatesOperationalReadinessFromPing(t *testing.T) {
 	router := NewServer(controller, apiTestLogger(t)).Router()
 
 	ready := httptest.NewRecorder()
-	router.ServeHTTP(ready, httptest.NewRequest(http.MethodGet, "/ready", nil))
+	router.ServeHTTP(ready, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/ready", nil))
 	assert.Equal(t, http.StatusServiceUnavailable, ready.Code)
 
 	ping := httptest.NewRecorder()
-	router.ServeHTTP(ping, httptest.NewRequest(http.MethodGet, "/ping", nil))
+	router.ServeHTTP(ping, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/ping", nil))
 	assert.Equal(t, http.StatusOK, ping.Code)
 	assert.Equal(t, map[string]string{"status": "healthy"}, decodeResponse[map[string]string](t, ping))
 }
@@ -168,7 +168,7 @@ func TestBlockedSubmissionKeepsV1ServiceUnavailableContract(t *testing.T) {
 	router := NewServer(controller, apiTestLogger(t)).Router()
 	recorder := httptest.NewRecorder()
 
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/start", nil))
+	router.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/start", nil))
 
 	assert.Equal(t, http.StatusServiceUnavailable, recorder.Code)
 	assert.Equal(t, ErrorResponse{Error: "Operation blocked"}, decodeResponse[ErrorResponse](t, recorder))

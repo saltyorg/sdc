@@ -41,7 +41,7 @@ func TestClient_StartContainers(t *testing.T) {
 			Status: "pending",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		assert.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -71,7 +71,7 @@ func TestClient_StopContainers(t *testing.T) {
 			Status: "pending",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		assert.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -99,7 +99,7 @@ func TestClient_GetJob(t *testing.T) {
 			Started: []string{"nginx", "redis"},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(job)
+		assert.NoError(t, json.NewEncoder(w).Encode(job))
 	}))
 	defer server.Close()
 
@@ -134,7 +134,7 @@ func TestClient_WaitForJob(t *testing.T) {
 			Status: status,
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(job)
+		assert.NoError(t, json.NewEncoder(w).Encode(job))
 	}))
 	defer server.Close()
 
@@ -157,7 +157,7 @@ func TestClient_WaitForJob_Timeout(t *testing.T) {
 			Status: "running",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(job)
+		assert.NoError(t, json.NewEncoder(w).Encode(job))
 	}))
 	defer server.Close()
 
@@ -179,7 +179,7 @@ func TestClient_Health(t *testing.T) {
 
 		resp := HealthResponse{Status: "healthy"}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		assert.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -196,7 +196,7 @@ func TestClient_Health_Unhealthy(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := HealthResponse{Status: "unhealthy"}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		assert.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -219,7 +219,7 @@ func TestClient_WaitForServerReady(t *testing.T) {
 		if callCount >= 2 {
 			resp := HealthResponse{Status: "ready"}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(resp)
+			assert.NoError(t, json.NewEncoder(w).Encode(resp))
 		} else {
 			w.WriteHeader(http.StatusServiceUnavailable)
 		}
@@ -256,7 +256,8 @@ func TestClient_Post_ErrorResponse(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"error": "invalid request"}`))
+		_, err := w.Write([]byte(`{"error": "invalid request"}`))
+		assert.NoError(t, err)
 	}))
 	defer server.Close()
 
@@ -273,7 +274,8 @@ func TestClient_Get_ErrorResponse(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(`{"error": "job not found"}`))
+		_, err := w.Write([]byte(`{"error": "job not found"}`))
+		assert.NoError(t, err)
 	}))
 	defer server.Close()
 

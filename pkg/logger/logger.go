@@ -39,11 +39,6 @@ func (l *Logger) Debug(msg string, keysAndValues ...any) {
 	}
 }
 
-// Sync is a no-op for stdlib logger (for compatibility with zap)
-func (l *Logger) Sync() error {
-	return nil
-}
-
 // formatFields formats key-value pairs for logging
 func formatFields(keysAndValues ...any) string {
 	if len(keysAndValues) == 0 {

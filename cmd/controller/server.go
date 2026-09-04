@@ -14,18 +14,16 @@ import (
 	"github.com/saltyorg/sdc/pkg/logger"
 )
 
-func runServer(ctx context.Context, cfg config.ServerConfig) error {
+func runServer(ctx context.Context, cfg config.ServerConfig) (returnErr error) {
 	log, err := logger.New(false)
 	if err != nil {
 		return fmt.Errorf("initializing logger: %w", err)
 	}
-	defer log.Sync()
-
 	dockerClient, err := docker.New(ctx, log)
 	if err != nil {
 		return fmt.Errorf("creating Docker client: %w", err)
 	}
-	defer dockerClient.Close()
+	defer func() { returnErr = errors.Join(returnErr, dockerClient.Close()) }()
 
 	controller := lifecycle.NewController(dockerClient, log)
 	server := &http.Server{

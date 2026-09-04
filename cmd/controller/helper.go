@@ -26,7 +26,6 @@ func runHelper(ctx context.Context, cfg config.HelperConfig) error {
 	if err != nil {
 		return fmt.Errorf("initializing logger: %w", err)
 	}
-	defer log.Sync()
 	apiClient := client.NewClient(cfg.ControllerURL, log)
 	apiClient.SetUserAgent("sdc/" + Version)
 	return executeHelper(ctx, cfg, apiClient, log)

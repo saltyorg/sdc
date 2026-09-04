@@ -19,6 +19,7 @@ func testCommandLogger(t *testing.T) *logger.Logger {
 }
 
 func TestRootCommandBuildsFreshTreesAndPassesContext(t *testing.T) {
+	type contextKey string
 	type serverCall struct {
 		ctx context.Context
 		cfg config.ServerConfig
@@ -32,7 +33,8 @@ func TestRootCommandBuildsFreshTreesAndPassesContext(t *testing.T) {
 		helper: func(context.Context, config.HelperConfig) error { return nil },
 	}
 
-	firstContext := context.WithValue(t.Context(), "test-key", "first")
+	const key contextKey = "test-key"
+	firstContext := context.WithValue(t.Context(), key, "first")
 	first := newRootCommand(runners)
 	first.SetArgs([]string{"server", "--host", "0.0.0.0", "--port", "4444"})
 	require.NoError(t, first.ExecuteContext(firstContext))
@@ -44,7 +46,7 @@ func TestRootCommandBuildsFreshTreesAndPassesContext(t *testing.T) {
 	require.Len(t, calls, 2)
 	assert.Equal(t, "0.0.0.0", calls[0].cfg.Host)
 	assert.Equal(t, 4444, calls[0].cfg.Port)
-	assert.Equal(t, "first", calls[0].ctx.Value("test-key"))
+	assert.Equal(t, "first", calls[0].ctx.Value(key))
 	assert.Equal(t, "127.0.0.1", calls[1].cfg.Host)
 	assert.Equal(t, 3377, calls[1].cfg.Port)
 }
