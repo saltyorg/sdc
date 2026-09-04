@@ -119,7 +119,7 @@ vet:
 ## lint: Run the pinned golangci-lint toolchain
 lint:
 	@echo "Running golangci-lint..."
-	$(GOCMD) tool -modfile=tools.mod golangci-lint run ./...
+	GOTOOLCHAIN=go1.26.0+auto $(GOCMD) tool -modfile=tools.mod golangci-lint run ./...
 
 ## verify: Verify downloaded module content
 verify:
