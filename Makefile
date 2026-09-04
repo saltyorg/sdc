@@ -25,7 +25,7 @@ BUILD_TIME?=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS=-ldflags "-s -w -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)"
 BUILD_FLAGS=CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS)
 
-.PHONY: all build clean test test-short test-coverage deps update tidy modernize fmt vet lint help run-server run-helper version
+.PHONY: all build check clean coverage-check deps fmt fmt-check help lint modernize run-helper run-server test test-coverage test-race test-short tidy tidy-check update verify vet version
 
 # Default target
 all: test build
@@ -51,7 +51,12 @@ clean:
 ## test: Run all tests
 test:
 	@echo "$(GREEN)Running tests...$(NC)"
-	$(GOTEST) -v ./...
+	$(GOTEST) -count=1 -v ./...
+
+## test-race: Run all tests with the race detector
+test-race:
+	@echo "Running tests with the race detector..."
+	$(GOTEST) -race -count=1 ./...
 
 ## test-short: Run short tests
 test-short:
@@ -93,19 +98,43 @@ fmt:
 	@echo "Formatting code..."
 	$(GOFMT) ./...
 
+## fmt-check: Verify Go source formatting without rewriting files
+fmt-check:
+	@files="$$(gofmt -l .)"; \
+	if [ -n "$$files" ]; then \
+		echo "Unformatted Go files:"; \
+		echo "$$files"; \
+		exit 1; \
+	fi
+
+## tidy-check: Verify go.mod and go.sum are tidy
+tidy-check:
+	$(GOMOD) tidy -diff
+
 ## vet: Run go vet
 vet:
 	@echo "Running go vet..."
 	$(GOVET) ./...
 
-## lint: Run golangci-lint (requires golangci-lint to be installed)
+## lint: Run the pinned golangci-lint toolchain
 lint:
 	@echo "Running golangci-lint..."
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run ./...; \
-	else \
-		echo "golangci-lint not installed. Install with: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin"; \
-	fi
+	$(GOCMD) tool -modfile=tools.mod golangci-lint run ./...
+
+## verify: Verify downloaded module content
+verify:
+	$(GOMOD) verify
+
+## coverage-check: Enforce at least 80 percent statement coverage for lifecycle
+coverage-check:
+	@mkdir -p $(BUILD_DIR)
+	$(GOTEST) -count=1 -coverprofile=$(BUILD_DIR)/lifecycle.cover ./internal/lifecycle
+	@coverage="$$(go tool cover -func=$(BUILD_DIR)/lifecycle.cover | awk '/^total:/ { gsub(/%/, "", $$3); print $$3 }')"; \
+	awk -v coverage="$$coverage" 'BEGIN { if (coverage + 0 < 80.0) { printf "Lifecycle coverage %s%% is below 80.0%%\n", coverage; exit 1 } }'; \
+	echo "Lifecycle coverage: $$coverage%"
+
+## check: Run all required local and CI quality gates
+check: fmt-check tidy-check vet test test-race coverage-check lint verify build
 
 ## run-server: Run the controller in server mode (API server)
 run-server:
