@@ -23,6 +23,7 @@ type fakeRuntime struct {
 
 	containers []Container
 	states     map[string]ContainerState
+	inspectErr map[string]error
 	startErr   map[string]error
 	stopErr    map[string]error
 	events     []string
@@ -41,6 +42,7 @@ func newFakeRuntime(containers ...Container) *fakeRuntime {
 	return &fakeRuntime{
 		containers: containers,
 		states:     states,
+		inspectErr: make(map[string]error),
 		startErr:   make(map[string]error),
 		stopErr:    make(map[string]error),
 	}
@@ -55,7 +57,7 @@ func (f *fakeRuntime) ListContainers(context.Context) ([]Container, error) {
 func (f *fakeRuntime) InspectContainer(_ context.Context, id string) (ContainerState, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.states[id], nil
+	return f.states[id], f.inspectErr[id]
 }
 
 func (f *fakeRuntime) StartContainer(ctx context.Context, id string) error {
@@ -309,4 +311,19 @@ func TestExecutorReportsDependencyCycleForEveryContainer(t *testing.T) {
 		assert.Equal(t, OutcomeBlocked, outcome.Outcome)
 		assert.Equal(t, ReasonDependencyCycle, outcome.Reason)
 	}
+}
+
+func TestExecutorReportsCanceledInspectionAsCanceled(t *testing.T) {
+	runtime := newFakeRuntime(testContainer("application", false))
+	runtime.inspectErr["application"] = context.Canceled
+
+	result := newExecutor(runtime, testLogger(t), 1).execute(t.Context(), Request{
+		Operation: OperationStart,
+		Timeout:   time.Minute,
+	})
+
+	require.Error(t, result.Err)
+	require.Len(t, result.Outcomes, 1)
+	assert.Equal(t, OutcomeCanceled, result.Outcomes[0].Outcome)
+	assert.Equal(t, ReasonCanceledByShutdown, result.Outcomes[0].Reason)
 }

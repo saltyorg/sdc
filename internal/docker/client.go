@@ -149,7 +149,7 @@ func (c *Client) InspectContainer(ctx context.Context, containerID string) (life
 	}
 
 	state := lifecycle.ContainerState{Running: inspected.Container.State.Running}
-	if inspected.Container.Config == nil || inspected.Container.Config.Healthcheck == nil {
+	if inspected.Container.Config == nil || inspected.Container.Config.Healthcheck == nil || len(inspected.Container.Config.Healthcheck.Test) == 0 {
 		state.Healthcheck = lifecycle.HealthcheckNone
 	} else if tests := inspected.Container.Config.Healthcheck.Test; len(tests) > 0 && strings.EqualFold(tests[0], "NONE") {
 		state.Healthcheck = lifecycle.HealthcheckDisabled

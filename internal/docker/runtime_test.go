@@ -57,6 +57,23 @@ func TestRuntimeMapsDockerContainerState(t *testing.T) {
 	assert.Equal(t, lifecycle.HealthUnhealthy, state.Health)
 }
 
+func TestRuntimeTreatsEmptyHealthcheckCommandAsAbsent(t *testing.T) {
+	daemon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"Id":"app-id","Config":{"Healthcheck":{"Test":[]}},"State":{"Running":true}}`))
+	}))
+	t.Cleanup(daemon.Close)
+	mobyClient, err := client.New(client.WithHost(daemon.URL))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, mobyClient.Close()) })
+	adapter := &Client{cli: mobyClient, logger: testDockerLogger(t)}
+
+	state, err := adapter.InspectContainer(t.Context(), "app-id")
+
+	require.NoError(t, err)
+	assert.Equal(t, lifecycle.HealthcheckNone, state.Healthcheck)
+}
+
 func TestRuntimeStartAndStopUseContainerID(t *testing.T) {
 	requests := make(chan string, 10)
 	daemon := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -121,6 +121,9 @@ func (e *executor) runBatch(ctx context.Context, batch []*node, run func(context
 func (e *executor) startNode(ctx context.Context, current *node, known map[string]nodeResult, ignored map[string]bool) nodeResult {
 	state, err := e.runtime.InspectContainer(ctx, current.container.ID)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return canceledResult(current, err)
+		}
 		return failedResult(current, err)
 	}
 	if ignored[current.container.Name] {
@@ -172,6 +175,9 @@ func (e *executor) startNode(ctx context.Context, current *node, known map[strin
 func (e *executor) stopNode(ctx context.Context, current *node, known map[string]nodeResult, ignored map[string]bool) nodeResult {
 	state, err := e.runtime.InspectContainer(ctx, current.container.ID)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return canceledResult(current, err)
+		}
 		return failedResult(current, err)
 	}
 	if ignored[current.container.Name] {
@@ -212,6 +218,9 @@ func (e *executor) waitForHealthy(ctx context.Context, id string) error {
 	defer ticker.Stop()
 	for {
 		state, err := e.runtime.InspectContainer(ctx, id)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
 		if err == nil {
 			switch state.Healthcheck {
 			case HealthcheckNone, HealthcheckDisabled:

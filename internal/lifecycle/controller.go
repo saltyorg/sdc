@@ -113,7 +113,7 @@ func (c *Controller) Block(ctx context.Context, duration time.Duration) error {
 	if err := c.send(ctx, blockCommand{duration: duration, reply: reply}); err != nil {
 		return err
 	}
-	return waitForError(ctx, c.done, reply)
+	return waitForError(ctx, reply)
 }
 
 func (c *Controller) Unblock(ctx context.Context) error {
@@ -121,7 +121,7 @@ func (c *Controller) Unblock(ctx context.Context) error {
 	if err := c.send(ctx, unblockCommand{reply: reply}); err != nil {
 		return err
 	}
-	return waitForError(ctx, c.done, reply)
+	return waitForError(ctx, reply)
 }
 
 func (c *Controller) Ready(ctx context.Context) error {
@@ -129,7 +129,7 @@ func (c *Controller) Ready(ctx context.Context) error {
 	if err := c.send(ctx, stateCommand{reply: reply}); err != nil {
 		return err
 	}
-	if err := waitForError(ctx, c.done, reply); err != nil {
+	if err := waitForError(ctx, reply); err != nil {
 		return err
 	}
 	if err := c.runtime.Ping(ctx); err != nil {
@@ -148,7 +148,7 @@ func (c *Controller) Shutdown(ctx context.Context) error {
 	if err := c.send(ctx, shutdownCommand{ctx: ctx, reply: reply}); err != nil {
 		return err
 	}
-	return waitForError(ctx, c.done, reply)
+	return waitForError(ctx, reply)
 }
 
 func (c *Controller) send(ctx context.Context, command any) error {
@@ -162,14 +162,12 @@ func (c *Controller) send(ctx context.Context, command any) error {
 	}
 }
 
-func waitForError(ctx context.Context, done <-chan struct{}, reply <-chan error) error {
+func waitForError(ctx context.Context, reply <-chan error) error {
 	select {
 	case err := <-reply:
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-done:
-		return nil
 	}
 }
 
