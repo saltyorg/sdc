@@ -4,19 +4,19 @@ A dependency-aware Docker container orchestrator for Saltbox, written in Go.
 
 ## Overview
 
-Saltbox Docker Controller manages Docker container startup and shutdown based on dependency labels. It ensures containers start in the correct order, waits for health checks, and handles graceful shutdown in reverse dependency order.
+Saltbox Docker Controller manages Docker container startup and shutdown based on dependency labels. It starts one lifecycle job at a time, prevents dependency failures from cascading into unsafe work, and handles shutdown in reverse dependency order.
 
 **Features:**
 - Dependency-aware orchestration using Docker labels
 - Topological sort for optimal startup/shutdown order
 - Parallel execution of independent containers
-- Health check polling (60 second timeout per container)
+- Health check polling bounded by the operation timeout
 - Job-based API for async operations
 - Block/unblock operations for maintenance windows
 - REST API server mode
 - Helper mode for Docker daemon lifecycle integration
 - Graceful shutdown handling
-- Comprehensive test suite (80 tests)
+- Deterministic lifecycle, API, client, and Docker-adapter tests
 
 ## Building
 
@@ -85,21 +85,19 @@ sdc/
 │   ├── api/               # HTTP handlers, middleware, and router
 │   ├── client/            # HTTP client for helper mode
 │   ├── config/            # Configuration management
-│   ├── docker/            # Docker client wrapper and label parsing
-│   ├── graph/             # Dependency graph and topological sort
-│   ├── jobs/              # Job manager with worker pool
-│   └── orchestrator/      # Container orchestration engine
-└── pkg/logger/            # Structured logging (Zap)
+│   ├── docker/            # Moby adapter for the local Docker daemon
+│   └── lifecycle/         # Planning, execution, jobs, blocking, and shutdown
+└── pkg/logger/            # Key-value logging over the standard library logger
 ```
 
 ### How It Works
 
 1. **Label-based dependencies**: Containers declare dependencies via `com.github.saltbox.depends_on` labels
-2. **Graph building**: Saltbox Docker Controller builds a dependency graph from all running containers
-3. **Topological sort**: Determines optimal startup/shutdown order
-4. **Batch execution**: Independent containers in each batch start/stop in parallel
-5. **Health checking**: Polls container health status before proceeding to dependents
-6. **Job tracking**: All operations are tracked as jobs with UUID and status
+2. **Lifecycle planning**: SDC builds and validates a deterministic dependency plan
+3. **Safe execution**: Failed or unavailable dependencies block affected work rather than failing open
+4. **Bounded parallelism**: Independent containers in a batch run concurrently, while complete jobs remain FIFO
+5. **State-aware ignores**: Ignored running containers protect dependencies needed to keep them running
+6. **Job tracking**: Jobs retain legacy result arrays and add per-container typed outcomes
 
 ## Docker Labels
 
@@ -140,16 +138,19 @@ services:
 
 Saltbox Docker Controller will ensure `postgres` and `redis` start first (in parallel), wait for health checks and startup delays, then start `app`.
 
+SDC connects only to Saltbox's rootful local Docker socket. `DOCKER_HOST` and remote Docker TLS configuration are intentionally not part of the controller contract.
+
 ## API Endpoints
 
 ### Container Operations
 - `POST /start` - Start containers in dependency order
   - Query params: `?timeout=600` (optional, default: 600)
-  - Response: `{"job_id": "uuid"}`
+  - Response: `{"job_id": "uuid", "status": "pending"}`
   - Returns HTTP 503 if operations are blocked
 - `POST /stop` - Stop containers in reverse dependency order
   - Query params: `?timeout=300&ignore=container1&ignore=container2` (optional, default timeout: 300)
-  - Response: `{"job_id": "uuid"}`
+  - JSON body: `{"shutdown": true}` makes this request the helper shutdown gate
+  - Response: `{"job_id": "uuid", "status": "pending"}`
   - Returns HTTP 503 if operations are blocked
 
 ### Block/Unblock Operations
@@ -162,24 +163,28 @@ Saltbox Docker Controller will ensure `postgres` and `redis` start first (in par
 
 ### Job Status
 - `GET /job_status/{job_id}` - Get job details and status
-  - Response: Full job object with status, results, and timing information
+  - Response: Full job object with status, timing, legacy arrays, and `outcomes`
+  - Outcomes use `changed`, `unchanged`, `ignored`, `protected`, `blocked`, `failed`, or `canceled`, with a stable reason and optional error
   - Returns `{"status": "not_found"}` with HTTP 404 if job doesn't exist
 
 ### Health Check
 - `GET /ping` - Health check endpoint
   - Response: `{"status": "healthy"}`
+- `GET /ready` - Operational readiness endpoint
+  - Returns `200` only while the lifecycle controller accepts work and the local Docker daemon responds
+  - Returns `503` with a machine-readable reason otherwise
 
 ## Helper Mode Details
 
 The helper mode is designed to run as a systemd service for automatic container lifecycle management:
 
 **Lifecycle:**
-1. Wait for controller server to become ready (60 second timeout)
+1. Wait for `/ready`, falling back to `/ping` when communicating with a v1 controller
 2. Apply configured startup delay (default: 5 seconds)
 3. Submit start job for all managed containers
 4. Wait for job completion
-5. Run until receiving SIGTERM/SIGINT
-6. Submit stop job for all containers
+5. Run until receiving SIGTERM/SIGINT; startup waits are cancelable
+6. Submit a priority shutdown stop job that cancels pending startup work
 7. Wait for stop completion and exit gracefully
 
 **Blocked Operations Handling:**
