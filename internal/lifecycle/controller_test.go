@@ -86,6 +86,27 @@ func TestControllerBlockRejectsNewAdmissionWithoutCancelingAcceptedJob(t *testin
 	assert.Equal(t, StatusCompleted, awaitTerminalJob(t, controller, accepted.ID).Status)
 }
 
+func TestControllerUnblockRestoresJobAdmission(t *testing.T) {
+	runtime := newFakeRuntime(testContainer("application", false))
+	controller := NewController(runtime, testLogger(t))
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		require.NoError(t, controller.Shutdown(ctx))
+	})
+
+	request := Request{Operation: OperationStart, Timeout: time.Minute}
+	require.NoError(t, controller.Block(t.Context(), time.Minute))
+	_, err := controller.Submit(t.Context(), request)
+	require.ErrorIs(t, err, ErrBlocked)
+
+	require.NoError(t, controller.Unblock(t.Context()))
+	accepted, err := controller.Submit(t.Context(), request)
+	require.NoError(t, err)
+	assert.Equal(t, StatusCompleted, awaitTerminalJob(t, controller, accepted.ID).Status)
+	assert.Equal(t, []string{"start:application"}, runtime.eventLog())
+}
+
 func TestControllerShutdownStopCancelsStartAndBecomesGate(t *testing.T) {
 	startGate := make(chan struct{})
 	stopGate := make(chan struct{})

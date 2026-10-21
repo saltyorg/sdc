@@ -119,7 +119,7 @@ vet:
 ## lint: Run the pinned golangci-lint toolchain
 lint:
 	@echo "Running golangci-lint..."
-	GOTOOLCHAIN=go1.26.0+auto $(GOCMD) tool -modfile=tools.mod golangci-lint run ./...
+	$(GOCMD) tool -modfile=tools.mod golangci-lint run ./...
 
 ## verify: Verify downloaded module content
 verify:
@@ -130,7 +130,7 @@ coverage-check:
 	@mkdir -p $(BUILD_DIR)
 	$(GOTEST) -count=1 -coverprofile=$(BUILD_DIR)/lifecycle.cover ./internal/lifecycle
 	@coverage="$$(go tool cover -func=$(BUILD_DIR)/lifecycle.cover | awk '/^total:/ { gsub(/%/, "", $$3); print $$3 }')"; \
-	awk -v coverage="$$coverage" 'BEGIN { if (coverage + 0 < 80.0) { printf "Lifecycle coverage %s%% is below 80.0%%\n", coverage; exit 1 } }'; \
+	awk -v coverage="$$coverage" 'BEGIN { if (coverage + 0 < 80.0) { printf "Lifecycle coverage %s%% is below 80.0%%\n", coverage; exit 1 } }' && \
 	echo "Lifecycle coverage: $$coverage%"
 
 ## check: Run all required local and CI quality gates
